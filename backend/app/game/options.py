@@ -27,8 +27,13 @@ class Option:
         self.theoretical_price = None
         self.bid_price = None
         self.ask_price = None
+        self.delta = None
+        self.gamma = None
+        self.vega = None
+        self.theta = None
+        self.rho = None
 
-        # Calculate initial prices
+        # Calculate initial prices and Greeks
         self.update_prices()
 
     def time_to_expiration(self):
@@ -61,13 +66,60 @@ class Option:
         
         return max(price, 0)  # Prevent negative prices
 
+    def calculate_greeks(self):
+        """
+        Calculates the Greeks: Delta, Gamma, Vega, Theta, and Rho.
+        """
+        T = self.time_to_expiration()
+        S = self.underlying_price
+        K = self.strike
+        r = self.risk_free_rate
+        sigma = self.volatility
+
+        d1 = (math.log(S / K) + (r + (sigma ** 2) / 2) * T) / (sigma * math.sqrt(T))
+        d2 = d1 - sigma * math.sqrt(T)
+
+        # Common factors
+        pdf_d1 = norm.pdf(d1)
+        cdf_d1 = norm.cdf(d1)
+        cdf_d2 = norm.cdf(d2)
+        cdf_neg_d1 = norm.cdf(-d1)
+        cdf_neg_d2 = norm.cdf(-d2)
+
+        # Delta
+        if self.option_type == "call":
+            self.delta = cdf_d1
+        elif self.option_type == "put":
+            self.delta = cdf_d1 - 1
+
+        # Gamma
+        self.gamma = pdf_d1 / (S * sigma * math.sqrt(T))
+
+        # Vega
+        self.vega = S * pdf_d1 * math.sqrt(T) / 100
+
+        # Theta
+        if self.option_type == "call":
+            self.theta = (-S * pdf_d1 * sigma / (2 * math.sqrt(T)) -
+                          r * K * math.exp(-r * T) * cdf_d2) / 365
+        elif self.option_type == "put":
+            self.theta = (-S * pdf_d1 * sigma / (2 * math.sqrt(T)) +
+                          r * K * math.exp(-r * T) * cdf_neg_d2) / 365
+
+        # Rho
+        if self.option_type == "call":
+            self.rho = K * T * math.exp(-r * T) * cdf_d2 / 100
+        elif self.option_type == "put":
+            self.rho = -K * T * math.exp(-r * T) * cdf_neg_d2 / 100
+
     def update_prices(self):
         """
-        Updates the theoretical price and sets bid/ask prices.
+        Updates the theoretical price, bid/ask prices, and Greeks.
         """
         self.theoretical_price = self.calculate_theoretical_price()
         self.bid_price = round(self.theoretical_price * 0.95, 2)  # Example bid price
         self.ask_price = round(self.theoretical_price * 1.05, 2)  # Example ask price
+        self.calculate_greeks()
 
     def get_summary(self):
         """
@@ -80,4 +132,9 @@ class Option:
             "theoretical_price": self.theoretical_price,
             "bid_price": self.bid_price,
             "ask_price": self.ask_price,
+            "delta": self.delta,
+            "gamma": self.gamma,
+            "vega": self.vega,
+            "theta": self.theta,
+            "rho": self.rho,
         }
