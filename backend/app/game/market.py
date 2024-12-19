@@ -1,18 +1,13 @@
-import random
 import pandas as pd
 from datetime import datetime
-from options import Option
+from app.game.news import News
+from app.game.options import Option
+import random
 
 class Market:
     def __init__(self, initial_price, volatility, expirations, strikes, refresh_interval=5):
         """
         Initialize the ClosedAI market.
-        Args:
-            initial_price (float): Starting stock price of ClosedAI.
-            volatility (float): Initial implied volatility.
-            expirations (list): List of expiration dates for options.
-            strikes (list): List of strike prices for options.
-            refresh_interval (int): Time interval (seconds) for market updates.
         """
         self.underlying_price = initial_price
         self.volatility = volatility
@@ -21,23 +16,26 @@ class Market:
         self.refresh_interval = refresh_interval
         self.last_update_time = datetime.now()
 
-        # Initialize an empty DataFrame to hold the option chain
+        # News manager
+        self.news_manager = News()
+
+        # Option chain as a DataFrame
         self.option_chain = pd.DataFrame(columns=[
-            "strike", "expiration", "type", "theoretical_price", "bid_price", "ask_price"
+            "strike", "expiration", "type", "theoretical_price", 
+            "bid_price", "ask_price", "delta", "gamma", "vega", "theta", "rho"
         ])
 
-        # Generate the initial option chain
+        # Generate the option chain
         self.generate_option_chain()
 
     def generate_option_chain(self):
         """
-        Generates an initial option chain and populates the DataFrame.
+        Generates an initial option chain as a Pandas DataFrame.
         """
         options = []
         for expiration in self.expirations:
             for strike in self.strikes:
                 for option_type in ["call", "put"]:
-                    # Use the Option class to calculate theoretical prices
                     option = Option(
                         strike=strike,
                         expiration=expiration,
@@ -51,20 +49,34 @@ class Market:
                         "type": option_type,
                         "theoretical_price": option.theoretical_price,
                         "bid_price": option.bid_price,
-                        "ask_price": option.ask_price
+                        "ask_price": option.ask_price,
+                        "delta": option.delta,
+                        "gamma": option.gamma,
+                        "vega": option.vega,
+                        "theta": option.theta,
+                        "rho": option.rho,
                     })
 
-        # Convert the list of options to a DataFrame
+        # Convert the options list to a DataFrame
         self.option_chain = pd.DataFrame(options)
 
     def update_market(self):
         """
-        Updates the underlying price and refreshes the option chain.
+        Updates the underlying price, volatility, and option prices.
         """
-        # Simulate a random price movement for the underlying
+        # Simulate price movement
         self.underlying_price += round(random.uniform(-1, 1), 2)
 
-        # Update each row in the DataFrame with new option prices
+        # Check for news and apply its impact
+        current_time = datetime.now()
+        news_event = self.news_manager.generate_news(current_time, probability=0.3)
+        if news_event:
+            self.underlying_price, self.volatility = self.news_manager.apply_news_impact(
+                self.underlying_price, self.volatility
+            )
+            print(f"News Event: {news_event['headline']}")
+
+        # Update all options in the DataFrame
         def update_row(row):
             option = Option(
                 strike=row["strike"],
@@ -76,35 +88,12 @@ class Market:
             return pd.Series({
                 "theoretical_price": option.theoretical_price,
                 "bid_price": option.bid_price,
-                "ask_price": option.ask_price
+                "ask_price": option.ask_price,
+                "delta": option.delta,
+                "gamma": option.gamma,
+                "vega": option.vega,
+                "theta": option.theta,
+                "rho": option.rho,
             })
 
-        # Apply the updates to the DataFrame
-        updated_data = self.option_chain.apply(update_row, axis=1)
-        self.option_chain.update(updated_data)
-
-    def filter_options(self, min_strike=None, max_strike=None, option_type=None):
-        """
-        Filters the option chain based on criteria.
-        Args:
-            min_strike (float): Minimum strike price.
-            max_strike (float): Maximum strike price.
-            option_type (str): Filter by option type ('call' or 'put').
-
-        Returns:
-            pd.DataFrame: Filtered DataFrame.
-        """
-        filtered_chain = self.option_chain
-        if min_strike is not None:
-            filtered_chain = filtered_chain[filtered_chain["strike"] >= min_strike]
-        if max_strike is not None:
-            filtered_chain = filtered_chain[filtered_chain["strike"] <= max_strike]
-        if option_type is not None:
-            filtered_chain = filtered_chain[filtered_chain["type"] == option_type]
-        return filtered_chain
-
-    def get_underlying_price(self):
-        """
-        Returns the current underlying price of ClosedAI stock.
-        """
-        return self.underlying_price
+        self.option_chain.update(self.option_chain.apply(update_row, axis=1))
