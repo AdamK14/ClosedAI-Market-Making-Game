@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from  app.game.news import News
+from  app.core.news import News
 
 class TestNews(unittest.TestCase):
     def setUp(self):

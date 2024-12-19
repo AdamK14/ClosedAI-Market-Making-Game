@@ -1,5 +1,5 @@
-from app.game.market import Market
-from app.game.player import Player
+from app.core.market import Market
+from app.core.player import Player
 
 class RoundManager:
     """

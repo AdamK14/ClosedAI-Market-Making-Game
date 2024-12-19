@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import datetime
-from app.game.news import News
-from app.game.options import Option
+from app.core.news import News
+from app.core.options import Option
 import random
 
 class Market:
